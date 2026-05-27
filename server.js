@@ -39,15 +39,42 @@ app.get('/api/me', async (req, res) => {
 app.get('/api/ubl/:companyId/e_invoices/:id', async (req, res) => {
   try {
     const token = req.headers.authorization;
-    // Get PDF URL and fetch it
+    const claudeKey = req.headers['x-claude-key'];
+    
+    // Get PDF URL
     const pdfRes = await fetch(`https://api.parasut.com/v4/${req.params.companyId}/e_invoices/${req.params.id}/pdf`, {
       headers: { Authorization: token }
     });
     const pdfData = await pdfRes.json();
     const pdfUrl = pdfData?.data?.attributes?.url;
     if (!pdfUrl) return res.status(404).json({ error: 'No PDF URL' });
-    // Return the PDF URL so frontend can use it
-    res.json({ pdf_url: pdfUrl, invoice_id: req.params.id });
+    
+    // Fetch PDF as base64
+    const pdfFileRes = await fetch(pdfUrl);
+    const pdfBuffer = await pdfFileRes.buffer();
+    const pdfBase64 = pdfBuffer.toString('base64');
+    
+    // Send to Claude to extract invoice details
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
+            { type: 'text', text: 'Bu faturadan ürün kalemlerini çıkar. Her kalem için: ürün adı, birim fiyat, miktar. Sadece JSON döndür, başka hiçbir şey yazma. Format: [{"name":"ürün adı","unit_price":100,"quantity":1}]' }
+          ]
+        }]
+      })
+    });
+    const claudeData = await claudeRes.json();
+    const text = claudeData.content?.[0]?.text || '[]';
+    const clean = text.replace(/```json|```/g, '').trim();
+    const items = JSON.parse(clean);
+    res.json({ items, invoice_id: req.params.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
