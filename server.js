@@ -39,20 +39,15 @@ app.get('/api/me', async (req, res) => {
 app.get('/api/ubl/:companyId/e_invoices/:id', async (req, res) => {
   try {
     const token = req.headers.authorization;
-    const invRes = await fetch(`https://api.parasut.com/v4/${req.params.companyId}/e_invoices/${req.params.id}`, {
+    // Get PDF URL and fetch it
+    const pdfRes = await fetch(`https://api.parasut.com/v4/${req.params.companyId}/e_invoices/${req.params.id}/pdf`, {
       headers: { Authorization: token }
     });
-    const invData = await invRes.json();
-    const signedUblUrl = invData?.data?.attributes?.signed_ubl_url;
-    if (!signedUblUrl) return res.status(404).json({ error: 'No signed_ubl_url' });
-    const zipRes = await fetch(signedUblUrl, { headers: { Authorization: token } });
-    const zipBuffer = await zipRes.buffer();
-    const unzipper = require('unzipper');
-    const directory = await unzipper.Open.buffer(zipBuffer);
-    const xmlFile = directory.files.find(f => f.path.endsWith('.xml'));
-    if (!xmlFile) return res.status(404).json({ error: 'No XML in ZIP' });
-    const xmlContent = await xmlFile.buffer();
-    res.send(xmlContent.toString('utf8'));
+    const pdfData = await pdfRes.json();
+    const pdfUrl = pdfData?.data?.attributes?.url;
+    if (!pdfUrl) return res.status(404).json({ error: 'No PDF URL' });
+    // Return the PDF URL so frontend can use it
+    res.json({ pdf_url: pdfUrl, invoice_id: req.params.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
