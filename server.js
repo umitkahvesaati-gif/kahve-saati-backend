@@ -64,4 +64,23 @@ app.post('/api/claude', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
+app.get('/api/ubl/:companyId/e_invoices/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization;
+    const ublRes = await fetch(`https://api.parasut.com/v4/${req.params.companyId}/e_invoices/${req.params.id}/signed_ubl`, {
+      headers: { Authorization: token }
+    });
+    const data = await ublRes.json();
+    const zipUrl = data?.data?.attributes?.url;
+    if (!zipUrl) return res.status(404).json({ error: 'No URL found' });
+    const zipRes = await fetch(zipUrl);
+    const zipBuffer = await zipRes.buffer();
+    const unzipper = require('unzipper');
+    const directory = await unzipper.Open.buffer(zipBuffer);
+    const xmlFile = directory.files.find(f => f.path.endsWith('.xml'));
+    if (!xmlFile) return res.status(404).json({ error: 'No XML in ZIP' });
+    const xmlContent = await xmlFile.buffer();
+    res.send(xmlContent.toString('utf8'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
