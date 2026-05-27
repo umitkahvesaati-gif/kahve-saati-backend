@@ -40,4 +40,28 @@ app.get('/api/me', async (req, res) => {
 app.all('/api/parasut/:companyId/*', async (req, res) => {
   try {
     const path = req.params[0];
-    const queryString = qs.s
+    const queryString = qs.stringify(req.query, { encode: false, allowDots: false });
+    const url = `https://api.parasut.com/v4/${req.params.companyId}/${path}${queryString ? '?' + queryString : ''}`;
+    console.log('Parasut URL:', url);
+    const r = await fetch(url, {
+      method: req.method === 'OPTIONS' ? 'GET' : req.method,
+      headers: { Authorization: req.headers.authorization, 'Content-Type': 'application/json' },
+      body: ['POST','PUT','PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined
+    });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/claude', async (req, res) => {
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': req.headers['x-claude-key'], 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(req.body)
+    });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
