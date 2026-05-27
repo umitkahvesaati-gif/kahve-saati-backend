@@ -42,17 +42,24 @@ app.get('/api/me', async (req, res) => {
 app.all('/api/parasut/:companyId/*', async (req, res) => {
   try {
     const path = req.params[0];
-    const query = new URLSearchParams(req.query).toString();
-    const url = `https://api.parasut.com/v4/${req.params.companyId}/${path}${query ? '?' + query : ''}`;
-    const r = await fetch(url, {
+    const url = `https://api.parasut.com/v4/${req.params.companyId}/${path}`;
+    const parasutUrl = new URL(url);
+    // Pass query params as-is
+    Object.entries(req.query).forEach(([k, v]) => {
+      parasutUrl.searchParams.set(k, v);
+    });
+    const r = await fetch(parasutUrl.toString(), {
       method: req.method === 'OPTIONS' ? 'GET' : req.method,
-      headers: { Authorization: req.headers.authorization, 'Content-Type': 'application/json' },
+      headers: { 
+        Authorization: req.headers.authorization, 
+        'Content-Type': 'application/json' 
+      },
       body: ['POST','PUT','PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined
     });
-    res.json(await r.json());
+    const data = await r.json();
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.post('/api/claude', async (req, res) => {
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
